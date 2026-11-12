@@ -1,4 +1,4 @@
-# matna — plan
+# 여기서맛나 (matna) — plan
 
 A small web app that lets a group vote on places to meet. Each place is a link to Naver Map, Kakao Map or Google Maps.
 
@@ -108,6 +108,7 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - Error states: a root error page with retry, a 404 page, a "모임을 찾을 수 없어요" page with a link to create one, and an empty state for an event with no places yet.
    - Deployment prep: the DB client uses `prepare: false` for pooled connections; the README has deployment steps; `SITE_URL` sets the share image's origin.
    - Deployment: Vercel project `matna` with functions in Singapore (`sin1`) and Neon Postgres in Singapore. The owner set `DATABASE_URL` as a Vercel environment variable. Migrations run in the Vercel build (`vercel-build` → `scripts/migrate.mjs` → `next build`), production builds only.
+   - First production deploy (2026-11-12): live at https://matna-rust.vercel.app; the host, participant and voting tests pass against it. From Vercel's servers, Naver place pages return a title and thumbnail. Kakao didn't (the title came from the share text, no thumbnail), the same as from the dev machine. The app's domain is `matna.space` (`SITE_URL` is set to it; `www.matna.space` redirects to it with a 308). Its DNS still pointed to Namecheap parking at first deploy.
 
 ## Open decisions
 

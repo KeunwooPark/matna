@@ -31,7 +31,7 @@ export function CopyLink({ path, title }: { path: string; title: string }) {
 
   async function share() {
     try {
-      await navigator.share({ title, text: `${title} — 어디서 만날까? 가고 싶은 곳을 골라 주세요.`, url });
+      await navigator.share({ title, text: `${title}, 어디서 만날까? 가고 싶은 곳을 골라 주세요.`, url });
     } catch {
       // Cancelled by the user, or not allowed here: nothing to do.
     }
