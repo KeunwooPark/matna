@@ -2,7 +2,7 @@
 
 A small web app that lets a group vote on places to meet. Each place is a link to Naver Map, Kakao Map or Google Maps.
 
-Status (2026-11-12): steps 1 and 2 done. `/e/{id}` is a placeholder until step 3.
+Status (2026-11-12): steps 1–3 done (step 3 tested in emulation only). Selections are not saved yet; that is step 4.
 
 ## User flow
 
@@ -86,7 +86,11 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - Naver answers 429 and Kakao 403 unless requests carry browser-like headers. During development, Kakao then blocked this machine's IP after repeated requests. So title and thumbnail fetching is best-effort: if the page can't be read, the title comes from the share text around the link, and the host can rename any place. Expect the same blocking from a datacenter IP in production.
    - Not yet tested with real short links (`naver.me`, `kko.to`, `maps.app.goo.gl`). The resolver follows their redirects generically.
    - Host page features: add by pasting a link or share text, rename, reorder (↑/↓), delete. Max 30 places per event.
-3. Participant page: layout, card strip, viewer.
+3. Participant page: layout, card strip, viewer. **Done.** Notes:
+   - The page is `position: fixed; inset: 0`, so the outer page can't scroll. Top to bottom: title bar with the selection count, the card strip (moved to the top at the owner's request), a bar with the open place's name and an "Open in app" link (a floating button covered the embedded pages), and the viewer.
+   - The last 4 opened places keep their iframe (hidden), so switching back doesn't reload the page.
+   - The Select button is separate from the card's open button, so selecting doesn't change the viewer.
+   - Selections live only in the page's state for now. Step 4 stores them as votes.
 4. Voting, nickname and live counts.
 5. Polish: empty and error states, the "Open in app" fallback, a share-link preview, deployment.
 
