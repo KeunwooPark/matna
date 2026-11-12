@@ -25,7 +25,7 @@ Live at https://matna.space. Deployed on Vercel (project `matna`, functions in `
 1. Create a Postgres database. With Neon or Supabase, use the pooled connection string; the client sets `prepare: false` so transaction-mode poolers work.
 2. Set the environment variables on the host:
    - `DATABASE_URL`: the database connection string.
-   - `SITE_URL`: the public origin, `https://matna.space`. Share previews use it for the image URL.
+   - `SITE_URL`: the public origin, `https://matna.space`. Share previews use it for the image URL, the home page for its canonical URL, and `sitemap.xml` and `robots.txt` for their links. It must be set at build time, since the home page is prerendered.
    - `DATABASE_URL_UNPOOLED` (optional): a direct connection for migrations. Without it, the migration script drops Neon's `-pooler` host suffix from `DATABASE_URL`.
 3. Deploy. On Vercel, the `vercel-build` script runs `scripts/migrate.mjs` and then `next build`, so pending migrations in `drizzle/` are applied before a deployment goes live. A failed migration fails the build, and the previous deployment keeps serving. Only production builds migrate; preview builds skip, so a branch can't change the production schema. On other hosts, run `MIGRATE=1 node scripts/migrate.mjs` before `npm run build`.
 
