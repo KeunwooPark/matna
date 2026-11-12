@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Provider } from "@/db/schema";
 import type { Tally } from "@/lib/votes";
+import { AppLogo } from "@/components/app-logo";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
 import { APP_NAME } from "@/lib/site";
 import { AboutSheet } from "./about-sheet";
@@ -171,12 +172,13 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
         <button
           onClick={() => setAbout(true)}
           aria-label={`${APP_NAME} 소개`}
-          className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent"
+          className="-my-1 mr-1.5 flex shrink-0 items-center gap-1.5 rounded-lg py-1 transition-opacity active:opacity-60"
         >
-          {APP_NAME}
+          <AppLogo className="h-7 w-7" />
+          <span className="text-base font-extrabold tracking-tight text-accent">{APP_NAME}</span>
         </button>
         <h1 className="min-w-0 flex-1 truncate font-bold">{title}</h1>
-        {me ? (
+        {me && (
           <button
             onClick={() => setAsking({ then: null })}
             aria-label="이름 바꾸기"
@@ -184,8 +186,6 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
           >
             {me.nickname} ✎
           </button>
-        ) : (
-          <span className="shrink-0 text-sm text-muted">가고 싶은 곳을 골라 주세요</span>
         )}
       </header>
 
