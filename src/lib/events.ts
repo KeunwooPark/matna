@@ -1,7 +1,8 @@
 import "server-only";
-import { asc, eq } from "drizzle-orm";
-import { db, events, places, type Event } from "@/db";
+import { asc, eq, getTableColumns } from "drizzle-orm";
+import { db, events, participants, places, type Event } from "@/db";
 import { tokensMatch } from "./ids";
+import { live } from "./places";
 
 export async function getEvent(id: string): Promise<Event | null> {
   const [event] = await db.select().from(events).where(eq(events.id, id)).limit(1);
@@ -14,6 +15,14 @@ export async function getEventAsHost(id: string, token: string | undefined): Pro
   return event && token && tokensMatch(event.hostToken, token) ? event : null;
 }
 
+/** Live (not deleted) places in display order, with the nickname of the participant who added each (null = the host). */
 export function getPlaces(eventId: string) {
-  return db.select().from(places).where(eq(places.eventId, eventId)).orderBy(asc(places.position), asc(places.createdAt));
+  return db
+    .select({ ...getTableColumns(places), addedByName: participants.nickname })
+    .from(places)
+    .leftJoin(participants, eq(places.addedBy, participants.id))
+    .where(live(eventId))
+    .orderBy(asc(places.position), asc(places.createdAt));
 }
+
+export type ListedPlace = Awaited<ReturnType<typeof getPlaces>>[number];

@@ -1,14 +1,12 @@
 "use server";
 
-import { and, count, eq, max } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
 import { db, events, places } from "@/db";
 import { getEventAsHost, getPlaces } from "@/lib/events";
 import { newId } from "@/lib/ids";
-import { ResolveError, resolvePlace } from "@/lib/resolve";
-
-const MAX_PLACES = 30;
+import { insertPlace, live, restoreDeletedPlace, softDeletePlace } from "@/lib/places";
 
 export type FormState = { error?: string; input?: string; ok?: number };
 
@@ -30,27 +28,31 @@ async function requireHost(eventId: string, token: string) {
 export async function addPlace(eventId: string, token: string, prev: FormState, form: FormData): Promise<FormState> {
   await requireHost(eventId, token);
   const input = String(form.get("link") ?? "").slice(0, 2000);
-  if (!input.trim()) return { error: "링크를 붙여 넣어 주세요.", input };
-
-  const [{ n }] = await db.select({ n: count() }).from(places).where(eq(places.eventId, eventId));
-  if (n >= MAX_PLACES) return { error: `장소는 최대 ${MAX_PLACES}개까지 추가할 수 있어요.`, input };
-
-  let resolved;
-  try {
-    resolved = await resolvePlace(input);
-  } catch (e) {
-    if (e instanceof ResolveError) return { error: e.message, input };
-    throw e;
-  }
-  const [{ last }] = await db.select({ last: max(places.position) }).from(places).where(eq(places.eventId, eventId));
-  await db.insert(places).values({ ...resolved, eventId, position: (last ?? -1) + 1 });
+  const result = await insertPlace(eventId, input, null);
+  if (result.error !== undefined) return { error: result.error, input };
   refresh();
   return { ok: (prev.ok ?? 0) + 1 };
 }
 
 export async function removePlace(eventId: string, token: string, placeId: string) {
   await requireHost(eventId, token);
-  await db.delete(places).where(and(eq(places.id, placeId), eq(places.eventId, eventId)));
+  await softDeletePlace(eventId, placeId, null);
+  refresh();
+}
+
+/** Brings back a place anyone deleted. */
+export async function restorePlace(eventId: string, token: string, placeId: string): Promise<{ error?: string }> {
+  await requireHost(eventId, token);
+  const error = await restoreDeletedPlace(eventId, placeId);
+  if (error) return { error };
+  refresh();
+  return {};
+}
+
+/** Turns participants' ability to add and delete places on or off. */
+export async function setGuestsCanEdit(eventId: string, token: string, on: boolean) {
+  await requireHost(eventId, token);
+  await db.update(events).set({ guestsCanEdit: on }).where(eq(events.id, eventId));
   refresh();
 }
 
@@ -58,7 +60,7 @@ export async function renamePlace(eventId: string, token: string, placeId: strin
   await requireHost(eventId, token);
   const title = String(form.get("title") ?? "").trim().slice(0, 100);
   if (!title) return;
-  await db.update(places).set({ title }).where(and(eq(places.id, placeId), eq(places.eventId, eventId)));
+  await db.update(places).set({ title }).where(and(eq(places.id, placeId), live(eventId)));
   refresh();
 }
 

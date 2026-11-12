@@ -1,11 +1,13 @@
 import { Suspense } from "react";
-import { addPlace } from "@/app/actions";
+import { addPlace, restorePlace, setGuestsCanEdit } from "@/app/actions";
 import { getEventAsHost, getPlaces } from "@/lib/events";
+import { getDeletedPlaces } from "@/lib/places";
 import { countParticipants, getTally } from "@/lib/votes";
 import { AutoRefresh } from "./auto-refresh";
 import { AddPlaceForm } from "./add-place-form";
 import { CopyLink } from "./copy-link";
 import { HostPlaceItem } from "./host-place-item";
+import { RestoreButton } from "./restore-button";
 
 export default function HostPage({ params, searchParams }: PageProps<"/e/[id]/host">) {
   return (
@@ -30,7 +32,7 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
       </div>
     );
   }
-  const [list, tally, joined] = await Promise.all([getPlaces(id), getTally(id, null), countParticipants(id)]);
+  const [list, tally, joined, deleted] = await Promise.all([getPlaces(id), getTally(id, null), countParticipants(id), getDeletedPlaces(id)]);
   const voteCount = (placeId: string) => tally.others[placeId]?.length ?? 0;
   const most = Math.max(0, ...list.map((p) => voteCount(p.id)));
 
@@ -89,6 +91,24 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
       <section className="flex flex-col gap-3">
         <h2 className="font-semibold">장소 추가</h2>
         <AddPlaceForm action={addPlace.bind(null, id, token)} />
+        <form action={setGuestsCanEdit.bind(null, id, token, !event.guestsCanEdit)} className="flex items-center gap-3 rounded-xl border border-line p-3">
+          <div className="min-w-0 flex-1">
+            <p id="guests-can-edit" className="text-sm font-medium">
+              참가자도 장소를 추가·삭제할 수 있어요
+            </p>
+            <p className="text-xs text-muted">삭제된 장소는 아래 ‘최근 삭제된 장소’에서 언제든 복원할 수 있어요.</p>
+          </div>
+          <button
+            role="switch"
+            aria-checked={event.guestsCanEdit}
+            aria-labelledby="guests-can-edit"
+            className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${event.guestsCanEdit ? "bg-accent" : "bg-line"}`}
+          >
+            <span
+              className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-[left] ${event.guestsCanEdit ? "left-[1.375rem]" : "left-0.5"}`}
+            />
+          </button>
+        </form>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -118,6 +138,23 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
           </ul>
         )}
       </section>
+
+      {deleted.length > 0 && (
+        <details className="flex flex-col gap-2">
+          <summary className="cursor-pointer font-semibold">최근 삭제된 장소 {deleted.length}곳</summary>
+          <ul className="mt-2 flex flex-col gap-2">
+            {deleted.map((d) => (
+              <li key={d.id} className="flex items-start gap-3 rounded-xl border border-line p-3">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{d.title}</p>
+                  <p className="text-xs text-muted">{d.deletedByName ? `${d.deletedByName}님이 삭제` : "내가 삭제"}</p>
+                </div>
+                <RestoreButton action={restorePlace.bind(null, id, token, d.id)} />
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

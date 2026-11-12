@@ -59,6 +59,7 @@ async function EventView({ params }: Pick<PageProps<"/e/[id]">, "params">) {
         thumbnailUrl: p.thumbnailUrl,
         embedUrl: p.embedUrl,
         openUrl: p.openUrl,
+        addedBy: p.addedByName,
       }))}
     />
   );

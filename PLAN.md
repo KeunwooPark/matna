@@ -55,8 +55,8 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
 
 ## Data model
 
-- **events**: `id` (random 22-character ID, used in the share URL), `host_token` (a second secret for editing), `title`, `created_at`
-- **places**: `id`, `event_id`, `original_url`, `embed_url`, `provider` (`naver` | `kakao` | `google`), `title`, `thumbnail_url`, `position`
+- **events**: `id` (random 22-character ID, used in the share URL), `host_token` (a second secret for editing), `title`, `guests_can_edit`, `created_at`
+- **places**: `id`, `event_id`, `original_url`, `embed_url`, `provider` (`naver` | `kakao` | `google`), `title`, `thumbnail_url`, `position`, `added_by` and `deleted_by` (participant, null = host), `deleted_at` (soft delete)
 - **participants**: `id`, `event_id`, `nickname`. The ID is kept in an httpOnly cookie scoped to `/e/{id}` (see step 4 notes).
 - **votes**: `place_id`, `participant_id`, unique on the pair
 
@@ -110,10 +110,18 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - Deployment: Vercel project `matna` with functions in Singapore (`sin1`) and Neon Postgres in Singapore. The owner set `DATABASE_URL` as a Vercel environment variable. Migrations run in the Vercel build (`vercel-build` → `scripts/migrate.mjs` → `next build`), production builds only.
    - First production deploy (2026-11-12): live at https://matna-rust.vercel.app; the host, participant and voting tests pass against it. From Vercel's servers, Naver place pages return a title and thumbnail. Kakao didn't (the title came from the share text, no thumbnail), the same as from the dev machine. The app's domain is `matna.space` (`SITE_URL` is set to it; `www.matna.space` redirects to it with a 308). Its DNS still pointed to Namecheap parking at first deploy.
 
+6. Participants add and delete places (2026-11-12). **Done, tested locally only.** Notes:
+   - The owner chose the open version: anyone who joined (has a nickname) can add places and delete any place, not only their own. The host page has a switch to turn this off per event (`guests_can_edit`, on by default, including for events created before this step).
+   - Deletes are soft (`deleted_at`), so votes survive. The deleter gets a 되돌리기 toast for 6 seconds; the host page lists recently deleted places with 복원. Host deletes are soft too.
+   - Participant page: a dashed "+ 장소 추가" card at the end of the strip (and a button in the empty state) opens a paste dialog with a clipboard-paste button. A ⋯ button on each card opens a bottom sheet that says who added the place and warns when people have picked it.
+   - Cards and host items show who added each place. Participant IDs are still never sent to clients, only nicknames.
+   - The tally now also carries `guestsCanEdit` and places deleted in the last 10 minutes, so participants who had a deleted place open see "○○님이 ‘…’을(를) 삭제했어요".
+   - Limits: 30 live places per event, 10 live places added per participant. A place whose embed URL is already live in the event is rejected as a duplicate (also on restore).
+   - Shared add logic lives in `src/lib/places.ts` (`insertPlace`, `softDeletePlace`, `restoreDeletedPlace`). Every place read filters out deleted places.
+
 ## Open decisions
 
 These are defaults proposed in the plan; the owner has not confirmed them.
 
 - **Vote visibility**: show counts and who voted to everyone (implemented in step 4). The alternative is hiding results until the host closes voting.
-- **Who can add places**: host only, as in the user flow. Letting participants suggest places is a small later addition.
 - **Google links**: the embed is map-only. If the full Google place page matters, the only option is opening it in a new tab.

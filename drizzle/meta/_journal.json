@@ -8,6 +8,13 @@
       "when": 1794457274901,
       "tag": "0000_condemned_virginia_dare",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794462763150,
+      "tag": "0001_large_warstar",
+      "breakpoints": true
     }
   ]
 }

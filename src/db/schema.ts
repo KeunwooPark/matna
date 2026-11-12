@@ -1,4 +1,4 @@
-import { integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const events = pgTable("events", {
   // Random 22-character ID. Knowing it is what lets someone view and vote.
@@ -6,6 +6,8 @@ export const events = pgTable("events", {
   // Second secret, only in the host's link. Required for every edit.
   hostToken: text("host_token").notNull(),
   title: text("title").notNull(),
+  // Whether participants may add and delete places. The host always can.
+  guestsCanEdit: boolean("guests_can_edit").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -27,6 +29,12 @@ export const places = pgTable("places", {
   title: text("title").notNull(),
   thumbnailUrl: text("thumbnail_url"),
   position: integer("position").notNull(),
+  // The participant who added it; null when the host did.
+  addedBy: text("added_by").references(() => participants.id, { onDelete: "set null" }),
+  // Deletes are soft so they can be undone (and restored by the host) with votes intact.
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  // The participant who deleted it; null when the host did.
+  deletedBy: text("deleted_by").references(() => participants.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

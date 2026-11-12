@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Provider } from "@/db/schema";
 import type { Tally } from "@/lib/votes";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
-import { joinEvent } from "./actions";
+import { deletePlace, joinEvent, suggestPlace, undoDeletePlace, type EditError } from "./actions";
+import { AddPlaceDialog } from "./add-place-dialog";
 import { NicknameDialog } from "./nickname-dialog";
+import { PlaceSheet } from "./place-sheet";
 import { useVotes } from "./use-votes";
 
 export type BrowserPlace = {
@@ -15,10 +17,18 @@ export type BrowserPlace = {
   thumbnailUrl: string | null;
   embedUrl: string;
   openUrl: string;
+  /** Nickname of the participant who added it; null when the host did. */
+  addedBy: string | null;
 };
+
+/** What to do once the participant has given a nickname. */
+type AfterJoin = { kind: "vote"; id: string } | { kind: "add" } | { kind: "delete"; id: string };
+type Toast = { message: string; undoId?: string };
 
 // Recently opened places keep their iframe (hidden) so going back to one doesn't reload it.
 const KEEP_FRAMES = 4;
+const TOAST_MS = 3000;
+const UNDO_MS = 6000;
 
 /** Participant view: a horizontal strip of cards on top, the open place's page below. */
 export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId: string; title: string; places: BrowserPlace[]; initialTally: Tally }) {
@@ -26,34 +36,108 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
   const [recent, setRecent] = useState<string[]>(openId ? [openId] : []);
   const [loaded, setLoaded] = useState<Set<string>>(new Set());
   const [folded, setFolded] = useState(false);
-  // Open while asking for a nickname; `then` is the place to select once joined.
-  const [asking, setAsking] = useState<{ then: string | null } | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
-  const { tally, isSelected, vote, setMe } = useVotes(
+  // Open while asking for a nickname; `then` is what to do once joined.
+  const [asking, setAsking] = useState<{ then: AfterJoin | null } | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [adding, setAdding] = useState(false);
+  const [menuFor, setMenuFor] = useState<string | null>(null);
+  // Places this participant deleted, so their own delete isn't reported back to them as someone else's.
+  const [myDeletes, setMyDeletes] = useState<Set<string>>(new Set());
+  // A place to scroll into view once its card is rendered (set after adding one).
+  const scrollTarget = useRef<string | null>(null);
+  const { tally, isSelected, vote, setMe, refetch } = useVotes(
     eventId,
     initialTally,
     places.map((p) => p.id),
   );
   const me = tally.me;
+  const canEdit = tally.guestsCanEdit;
 
   function open(id: string) {
     setOpenId(id);
     setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, KEEP_FRAMES));
   }
 
-  function flash(message: string) {
-    setNotice(message);
-    setTimeout(() => setNotice(null), 3000);
+  function flash(message: string, undoId?: string) {
+    clearTimeout(toastTimer.current);
+    setToast({ message, undoId });
+    toastTimer.current = setTimeout(() => setToast(null), undoId ? UNDO_MS : TOAST_MS);
+  }
+
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+
+  // After adding a place, bring its card into view once the refreshed list includes it.
+  useEffect(() => {
+    const id = scrollTarget.current;
+    const card = id && document.getElementById(`card-${id}`);
+    if (!card) return;
+    scrollTarget.current = null;
+    card.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
+  }, [places, openId]);
+
+  /** Handles a failed add/delete: asks for a nickname, reports a lock, or shows the message. */
+  function editFailed(result: EditError, then: AfterJoin): void {
+    if (result.error === "join") {
+      setMe(null);
+      setAsking({ then });
+    } else if (result.error === "locked") {
+      flash("모임을 만든 사람이 장소 추가·삭제를 막아 두었어요.");
+      void refetch();
+    } else flash(result.message);
+  }
+
+  async function add(input: string): Promise<string | null> {
+    const result = await suggestPlace(eventId, input).catch(() => ({ error: "message" as const, message: "연결이 끊겼어요. 다시 시도해 주세요." }));
+    if ("id" in result) {
+      setAdding(false);
+      setFolded(false);
+      scrollTarget.current = result.id;
+      open(result.id);
+      return null;
+    }
+    if (result.error === "message") return result.message;
+    setAdding(false);
+    editFailed(result, { kind: "add" });
+    return null;
+  }
+
+  function startAdding() {
+    if (!me) setAsking({ then: { kind: "add" } });
+    else setAdding(true);
+  }
+
+  async function remove(id: string) {
+    const title = places.find((p) => p.id === id)?.title ?? "장소";
+    const result = await deletePlace(eventId, id).catch(() => ({ error: "message" as const, message: "삭제하지 못했어요. 다시 시도해 주세요." }));
+    setMenuFor(null);
+    if ("ok" in result) {
+      setMyDeletes((s) => new Set(s).add(id));
+      flash(`‘${title}’을(를) 삭제했어요.`, id);
+    } else editFailed(result, { kind: "delete", id });
+  }
+
+  async function undo(id: string) {
+    setToast(null);
+    const result = await undoDeletePlace(eventId, id).catch(() => ({ error: "message" as const, message: "되돌리지 못했어요. 다시 시도해 주세요." }));
+    if ("ok" in result) {
+      setMyDeletes((s) => {
+        const next = new Set(s);
+        next.delete(id);
+        return next;
+      });
+    } else if (result.error === "message") flash(result.message);
+    else editFailed(result, { kind: "delete", id });
   }
 
   async function toggle(id: string) {
-    if (!me) return setAsking({ then: id });
+    if (!me) return setAsking({ then: { kind: "vote", id } });
     const result = await vote(id, !isSelected(id));
     if ("error" in result) {
       if (result.error === "join") {
         // The cookie was lost (e.g. cleared site data): ask again.
         setMe(null);
-        setAsking({ then: id });
+        setAsking({ then: { kind: "vote", id } });
       } else if (result.error === "place") flash("이 장소는 삭제되었어요.");
       else flash("저장하지 못했어요. 다시 시도해 주세요.");
     }
@@ -65,12 +149,17 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
     setMe(result.nickname);
     const then = asking?.then;
     setAsking(null);
-    if (then && !isSelected(then)) void vote(then, true);
+    if (then?.kind === "vote" && !isSelected(then.id)) void vote(then.id, true);
+    else if (then?.kind === "add") setAdding(true);
+    else if (then?.kind === "delete") void remove(then.id);
     return null;
   }
 
-  // If the open place was removed by the host, fall back to the first one.
+  // If the open place was deleted, fall back to the first one, and say who deleted it (unless it was this participant).
   const current = places.find((p) => p.id === openId) ?? places[0];
+  const gone = openId && current?.id !== openId && !myDeletes.has(openId) ? tally.removed[openId] : undefined;
+  const votersOf = (id: string) => [...(isSelected(id) ? ["나"] : []), ...(tally.others[id] ?? [])];
+  const menuPlace = menuFor ? places.find((p) => p.id === menuFor) : undefined;
   const shownFrames = places.filter((p) => recent.includes(p.id) || p.id === current?.id);
 
   return (
@@ -91,16 +180,35 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
       </header>
 
       {asking && <NicknameDialog initial={me?.nickname ?? ""} onSubmit={join} onClose={() => setAsking(null)} />}
-      {notice && (
-        <p role="status" className="fixed inset-x-4 bottom-6 z-10 rounded-xl bg-foreground px-4 py-3 text-center text-sm text-background shadow-lg">
-          {notice}
-        </p>
+      {adding && <AddPlaceDialog onSubmit={add} onClose={() => setAdding(false)} />}
+      {menuPlace && <PlaceSheet place={menuPlace} voters={votersOf(menuPlace.id)} onDelete={() => remove(menuPlace.id)} onClose={() => setMenuFor(null)} />}
+      {toast && (
+        <div
+          role="status"
+          className="fixed inset-x-4 bottom-6 z-30 flex items-center gap-3 rounded-xl bg-foreground px-4 py-3 text-sm text-background shadow-lg"
+        >
+          <p className={`min-w-0 flex-1 ${toast.undoId ? "" : "text-center"}`}>{toast.message}</p>
+          {toast.undoId && (
+            <button onClick={() => void undo(toast.undoId!)} className="shrink-0 font-bold text-accent">
+              되돌리기
+            </button>
+          )}
+        </div>
       )}
 
       {places.length === 0 ? (
         <div className="m-auto px-6 text-center">
           <p className="font-semibold">아직 장소 후보가 없어요</p>
-          <p className="mt-1 text-sm text-muted">모임을 만든 사람이 장소를 추가하면 여기에 바로 나타나요.</p>
+          {canEdit ? (
+            <>
+              <p className="mt-1 text-sm text-muted">지도 앱에서 공유 링크를 복사해 첫 후보를 올려 보세요.</p>
+              <button onClick={startAdding} className="mt-4 rounded-xl bg-accent px-5 py-2.5 font-semibold text-white">
+                + 장소 추가
+              </button>
+            </>
+          ) : (
+            <p className="mt-1 text-sm text-muted">모임을 만든 사람이 장소를 추가하면 여기에 바로 나타나요.</p>
+          )}
         </div>
       ) : (
         <>
@@ -115,16 +223,20 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
                 {places.map((p) => {
                   const isOpen = p.id === current?.id;
                   const selected = isSelected(p.id);
-                  const voters = [...(selected ? ["나"] : []), ...(tally.others[p.id] ?? [])];
+                  const voters = votersOf(p.id);
                   return (
                     <li
                       key={p.id}
-                      className={`flex w-36 shrink-0 snap-start flex-col overflow-hidden rounded-xl border-2 bg-background ${isOpen ? "border-foreground" : "border-line"}`}
+                      id={`card-${p.id}`}
+                      className={`relative flex w-36 shrink-0 snap-start flex-col overflow-hidden rounded-xl border-2 bg-background ${isOpen ? "border-foreground" : "border-line"}`}
                     >
                       <button onClick={() => open(p.id)} aria-current={isOpen} className="text-left">
                         <PlaceThumb provider={p.provider} title={p.title} src={p.thumbnailUrl} className="h-16 w-full" />
                         <div className="px-2 pt-1.5">
-                          <ProviderBadge provider={p.provider} />
+                          <div className="flex items-center gap-1">
+                            <ProviderBadge provider={p.provider} />
+                            {p.addedBy && <span className="min-w-0 truncate text-[11px] text-muted">{p.addedBy} 추가</span>}
+                          </div>
                           <p className="mt-1 line-clamp-2 h-10 text-sm font-medium leading-5">{p.title}</p>
                           <p className="mt-0.5 truncate text-xs text-muted" data-testid="voters">
                             {voters.length > 0 ? (
@@ -144,9 +256,34 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
                       >
                         {selected ? "✓ 선택됨" : "선택"}
                       </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => setMenuFor(p.id)}
+                          aria-label={`${p.title} 메뉴`}
+                          className="absolute right-1 top-1 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white"
+                        >
+                          <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor">
+                            <circle cx="5" cy="12" r="2" />
+                            <circle cx="12" cy="12" r="2" />
+                            <circle cx="19" cy="12" r="2" />
+                          </svg>
+                        </button>
+                      )}
                     </li>
                   );
                 })}
+                {canEdit && (
+                  <li className="flex w-36 shrink-0 snap-start">
+                    <button
+                      onClick={startAdding}
+                      className="flex w-full flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-muted"
+                    >
+                      <span className="text-2xl leading-none">+</span>
+                      <span className="text-sm font-semibold text-foreground">장소 추가</span>
+                      <span className="text-xs">지도 링크 붙여넣기</span>
+                    </button>
+                  </li>
+                )}
               </ul>
             </div>
           </div>
@@ -177,6 +314,17 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
               <a href={current.openUrl} target="_blank" rel="noopener noreferrer" className="shrink-0 font-medium text-accent">
                 {current.provider === "google" ? "구글 지도에서 보기" : "앱에서 열기"} ↗
               </a>
+            </div>
+          )}
+
+          {gone && (
+            <div role="status" className="flex shrink-0 items-center gap-2 bg-warn-bg px-4 py-2 text-sm text-warn-fg">
+              <p className="min-w-0 flex-1">
+                {gone.by ? `${gone.by}님이` : "모임을 만든 사람이"} ‘{gone.title}’을(를) 삭제했어요.
+              </p>
+              <button onClick={() => current && open(current.id)} className="shrink-0 font-semibold">
+                확인
+              </button>
             </div>
           )}
 

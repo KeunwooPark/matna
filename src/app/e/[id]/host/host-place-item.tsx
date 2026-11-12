@@ -1,8 +1,8 @@
 import { movePlace, removePlace, renamePlace } from "@/app/actions";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
-import type { Place } from "@/db/schema";
+import type { ListedPlace } from "@/lib/events";
 
-type Props = { place: Place; eventId: string; token: string; first: boolean; last: boolean; voters: string[]; leading: boolean };
+type Props = { place: ListedPlace; eventId: string; token: string; first: boolean; last: boolean; voters: string[]; leading: boolean };
 
 export function HostPlaceItem({ place: p, eventId, token, first, last, voters, leading }: Props) {
   const btn = "rounded-lg border border-line px-2 py-1 text-xs disabled:opacity-30";
@@ -16,6 +16,7 @@ export function HostPlaceItem({ place: p, eventId, token, first, last, voters, l
             {p.title}
           </a>
         </div>
+        {p.addedByName && <p className="truncate text-xs text-muted">{p.addedByName}님이 추가</p>}
         <p className="truncate text-xs text-muted" data-testid="host-voters">
           {voters.length > 0 ? (
             <>
