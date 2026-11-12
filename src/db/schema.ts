@@ -39,7 +39,7 @@ export const places = pgTable("places", {
 });
 
 export const participants = pgTable("participants", {
-  // Random ID, kept in the participant's localStorage.
+  // Random ID, kept in the participant's httpOnly cookie (matna_p, scoped to /e/{id}).
   id: text("id").primaryKey(),
   eventId: text("event_id")
     .notNull()
