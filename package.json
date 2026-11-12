@@ -9,7 +9,8 @@
     "lint": "eslint",
     "db:up": "docker compose up -d db",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate"
+    "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
+    "vercel-build": "node scripts/migrate.mjs && next build"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.4",

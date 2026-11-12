@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Provider } from "@/db/schema";
 import type { Tally } from "@/lib/votes";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
@@ -98,7 +98,10 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
       )}
 
       {places.length === 0 ? (
-        <p className="m-auto px-6 text-center text-muted">아직 추가된 장소가 없어요.</p>
+        <div className="m-auto px-6 text-center">
+          <p className="font-semibold">아직 장소 후보가 없어요</p>
+          <p className="mt-1 text-sm text-muted">모임을 만든 사람이 장소를 추가하면 여기에 바로 나타나요.</p>
+        </div>
       ) : (
         <>
           {/* Folding animates the row height from 1fr to 0fr; `inert` keeps hidden cards out of tab order. */}
@@ -190,12 +193,36 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
                 className={`absolute inset-0 h-full w-full border-0 bg-white ${p.id === current?.id ? "" : "invisible"}`}
               />
             ))}
-            {current && !loaded.has(current.id) && (
-              <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted">불러오는 중…</p>
-            )}
+            {current && !loaded.has(current.id) && <LoadingHint key={current.id} openUrl={current.openUrl} />}
           </section>
         </>
       )}
     </>
+  );
+}
+
+const SLOW_MS = 8000;
+
+/** Shown over the viewer until the place page loads; offers the app if it takes too long. */
+function LoadingHint({ openUrl }: { openUrl: string }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SLOW_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-muted">
+      <p>불러오는 중…</p>
+      {slow && (
+        <a
+          href={openUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pointer-events-auto rounded-full border border-line bg-background px-4 py-2 font-medium text-foreground"
+        >
+          페이지가 안 열리면 앱에서 보기 ↗
+        </a>
+      )}
+    </div>
   );
 }

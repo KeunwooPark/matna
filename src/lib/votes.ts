@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db, participants, places, votes } from "@/db";
 
@@ -48,4 +48,9 @@ export async function getTally(eventId: string, me: Participant | null): Promise
     else (others[v.placeId] ??= []).push(v.nickname);
   }
   return { placeIds: placeRows.map((p) => p.id), others, mine, me: me && { nickname: me.nickname } };
+}
+
+export async function countParticipants(eventId: string): Promise<number> {
+  const [{ n }] = await db.select({ n: count() }).from(participants).where(eq(participants.eventId, eventId));
+  return n;
 }

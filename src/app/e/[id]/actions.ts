@@ -1,11 +1,11 @@
 "use server";
 
-import { and, count, eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { db, participants, places, votes } from "@/db";
 import { getEvent } from "@/lib/events";
 import { newId } from "@/lib/ids";
-import { PARTICIPANT_COOKIE, getParticipant } from "@/lib/votes";
+import { PARTICIPANT_COOKIE, countParticipants, getParticipant } from "@/lib/votes";
 
 const MAX_NICKNAME = 20;
 const MAX_PARTICIPANTS = 200;
@@ -25,8 +25,7 @@ export async function joinEvent(eventId: string, rawNickname: string): Promise<J
     return { nickname };
   }
 
-  const [{ n }] = await db.select({ n: count() }).from(participants).where(eq(participants.eventId, eventId));
-  if (n >= MAX_PARTICIPANTS) return { error: "참여 인원이 너무 많아요." };
+  if ((await countParticipants(eventId)) >= MAX_PARTICIPANTS) return { error: "참여 인원이 너무 많아요." };
   const id = newId();
   await db.insert(participants).values({ id, eventId, nickname });
 

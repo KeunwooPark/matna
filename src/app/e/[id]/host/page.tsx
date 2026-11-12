@@ -1,6 +1,8 @@
 import { Suspense } from "react";
 import { addPlace } from "@/app/actions";
 import { getEventAsHost, getPlaces } from "@/lib/events";
+import { countParticipants, getTally } from "@/lib/votes";
+import { AutoRefresh } from "./auto-refresh";
 import { AddPlaceForm } from "./add-place-form";
 import { CopyLink } from "./copy-link";
 import { HostPlaceItem } from "./host-place-item";
@@ -28,7 +30,9 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
       </div>
     );
   }
-  const list = await getPlaces(id);
+  const [list, tally, joined] = await Promise.all([getPlaces(id), getTally(id, null), countParticipants(id)]);
+  const voteCount = (placeId: string) => tally.others[placeId]?.length ?? 0;
+  const most = Math.max(0, ...list.map((p) => voteCount(p.id)));
 
   return (
     <div className="flex flex-col gap-8">
@@ -39,10 +43,11 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
 
       <section className="flex flex-col gap-2">
         <h2 className="font-semibold">참가자에게 공유할 링크</h2>
-        <CopyLink path={`/e/${id}`} />
-        <p className="text-xs text-muted">
-          지금 보고 있는 이 페이지 주소는 관리자용이에요. 장소를 고치려면 이 주소를 따로 저장해 두세요.
-        </p>
+        <CopyLink path={`/e/${id}`} title={event.title} />
+        <p className="text-xs text-muted">지금 보고 있는 이 페이지 주소는 관리자용이에요. 장소를 고치려면 이 주소를 따로 저장해 두세요.</p>
+        <a href={`/e/${id}`} target="_blank" className="text-sm font-medium text-accent">
+          참가자 화면 열기 ↗
+        </a>
       </section>
 
       <section className="flex flex-col gap-3">
@@ -51,7 +56,11 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
       </section>
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-semibold">장소 후보 {list.length}곳</h2>
+        <div className="flex items-baseline justify-between">
+          <h2 className="font-semibold">장소 후보 {list.length}곳</h2>
+          <span className="text-sm text-muted">참여 {joined}명</span>
+        </div>
+        <AutoRefresh />
         {list.length === 0 ? (
           <p className="rounded-xl border border-dashed border-line p-6 text-center text-sm text-muted">
             아직 장소가 없어요. 지도 앱에서 공유 링크를 복사해 붙여 넣어 보세요.
@@ -59,7 +68,16 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
         ) : (
           <ul className="flex flex-col gap-2">
             {list.map((p, i) => (
-              <HostPlaceItem key={p.id} place={p} eventId={id} token={token} first={i === 0} last={i === list.length - 1} />
+              <HostPlaceItem
+                key={p.id}
+                place={p}
+                eventId={id}
+                token={token}
+                first={i === 0}
+                last={i === list.length - 1}
+                voters={tally.others[p.id] ?? []}
+                leading={most > 0 && voteCount(p.id) === most}
+              />
             ))}
           </ul>
         )}

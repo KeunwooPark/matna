@@ -2,7 +2,7 @@
 
 A small web app that lets a group vote on places to meet. Each place is a link to Naver Map, Kakao Map or Google Maps.
 
-Status (2026-11-12): steps 1–4 done (steps 3–4 tested in emulation only). Next is step 5, polish and deployment.
+Status (2026-11-12): steps 1–4 done and step 5 done except deployment (steps 3–5 tested in emulation only).
 
 ## User flow
 
@@ -100,7 +100,14 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - Each card shows the vote count and the names, with "나" for your own pick.
    - Limits: 20-character nicknames, 200 participants per event.
    - A browser that loses its cookie (cleared data, or a different browser such as KakaoTalk then Safari) joins as a new participant.
-5. Polish: empty and error states, the "Open in app" fallback, a share-link preview, deployment.
+5. Polish: empty and error states, the "Open in app" fallback, a share-link preview, deployment. **Done except deployment.** Notes:
+   - Share preview: event pages set `og:title` to "{event} — 어디서 만날까?" and the description to the first three place names. The image is a static `public/og.png` (source: `design/og-image.html`). The page's own `openGraph` replaces the layout's instead of merging, so both list the image.
+   - Next.js streams metadata to browsers and puts it in `<head>` only for user agents in `htmlLimitedBots`. That list replaces Next's default, so `next.config.ts` repeats the default and adds `kakaotalk-scrap`, `Daumoa` and `TelegramBot`. Bare "Kakao" or "naver" would also match the in-app browsers real users have. Checked with curl: scraper user agents get the tags in `<head>`, while the KakaoTalk in-app browser gets them streamed. Not yet checked with a real KakaoTalk share, which needs a public URL.
+   - Host page: a share button that opens the phone's share sheet (where `navigator.share` exists), a link to the participant view, the participant count, and each place's votes with a "최다" mark on the leader(s). It re-renders from the server every 10 seconds while visible.
+   - "Open in app": each place has the link in the bar under the strip. If a place page hasn't loaded after 8 seconds, the viewer also offers it. A page blocked by frame headers can't be detected from the parent, so the link is always shown rather than only on failure.
+   - Error states: a root error page with retry, a 404 page, a "모임을 찾을 수 없어요" page with a link to create one, and an empty state for an event with no places yet.
+   - Deployment prep: the DB client uses `prepare: false` for pooled connections; the README has deployment steps; `SITE_URL` sets the share image's origin.
+   - Deployment: Vercel project `matna` with functions in Singapore (`sin1`) and Neon Postgres in Singapore. The owner set `DATABASE_URL` as a Vercel environment variable. Migrations run in the Vercel build (`vercel-build` → `scripts/migrate.mjs` → `next build`), production builds only.
 
 ## Open decisions
 
