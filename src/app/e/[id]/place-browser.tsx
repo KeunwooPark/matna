@@ -2,7 +2,11 @@
 
 import { useState } from "react";
 import type { Provider } from "@/db/schema";
+import type { Tally } from "@/lib/votes";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
+import { joinEvent } from "./actions";
+import { NicknameDialog } from "./nickname-dialog";
+import { useVotes } from "./use-votes";
 
 export type BrowserPlace = {
   id: string;
@@ -17,35 +21,81 @@ export type BrowserPlace = {
 const KEEP_FRAMES = 4;
 
 /** Participant view: a horizontal strip of cards on top, the open place's page below. */
-export function PlaceBrowser({ title, places }: { title: string; places: BrowserPlace[] }) {
+export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId: string; title: string; places: BrowserPlace[]; initialTally: Tally }) {
   const [openId, setOpenId] = useState(places[0]?.id ?? null);
   const [recent, setRecent] = useState<string[]>(openId ? [openId] : []);
   const [loaded, setLoaded] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [folded, setFolded] = useState(false);
+  // Open while asking for a nickname; `then` is the place to select once joined.
+  const [asking, setAsking] = useState<{ then: string | null } | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const { tally, isSelected, vote, setMe } = useVotes(
+    eventId,
+    initialTally,
+    places.map((p) => p.id),
+  );
+  const me = tally.me;
 
   function open(id: string) {
     setOpenId(id);
     setRecent((r) => [id, ...r.filter((x) => x !== id)].slice(0, KEEP_FRAMES));
   }
 
-  function toggle(id: string) {
-    setSelected((s) => {
-      const next = new Set(s);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  function flash(message: string) {
+    setNotice(message);
+    setTimeout(() => setNotice(null), 3000);
   }
 
-  const current = places.find((p) => p.id === openId);
+  async function toggle(id: string) {
+    if (!me) return setAsking({ then: id });
+    const result = await vote(id, !isSelected(id));
+    if ("error" in result) {
+      if (result.error === "join") {
+        // The cookie was lost (e.g. cleared site data): ask again.
+        setMe(null);
+        setAsking({ then: id });
+      } else if (result.error === "place") flash("이 장소는 삭제되었어요.");
+      else flash("저장하지 못했어요. 다시 시도해 주세요.");
+    }
+  }
+
+  async function join(nickname: string): Promise<string | null> {
+    const result = await joinEvent(eventId, nickname).catch(() => ({ error: "연결이 끊겼어요. 다시 시도해 주세요." }));
+    if (result.error !== undefined) return result.error;
+    setMe(result.nickname);
+    const then = asking?.then;
+    setAsking(null);
+    if (then && !isSelected(then)) void vote(then, true);
+    return null;
+  }
+
+  // If the open place was removed by the host, fall back to the first one.
+  const current = places.find((p) => p.id === openId) ?? places[0];
+  const shownFrames = places.filter((p) => recent.includes(p.id) || p.id === current?.id);
 
   return (
     <>
       <header className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))]">
         <h1 className="min-w-0 flex-1 truncate font-bold">{title}</h1>
-        <span className="shrink-0 text-sm text-muted">{selected.size > 0 ? `${selected.size}곳 선택` : "가고 싶은 곳을 골라 주세요"}</span>
+        {me ? (
+          <button
+            onClick={() => setAsking({ then: null })}
+            aria-label="이름 바꾸기"
+            className="max-w-[40%] shrink-0 truncate rounded-full border border-line px-3 py-1 text-sm"
+          >
+            {me.nickname} ✎
+          </button>
+        ) : (
+          <span className="shrink-0 text-sm text-muted">가고 싶은 곳을 골라 주세요</span>
+        )}
       </header>
+
+      {asking && <NicknameDialog initial={me?.nickname ?? ""} onSubmit={join} onClose={() => setAsking(null)} />}
+      {notice && (
+        <p role="status" className="fixed inset-x-4 bottom-6 z-10 rounded-xl bg-foreground px-4 py-3 text-center text-sm text-background shadow-lg">
+          {notice}
+        </p>
+      )}
 
       {places.length === 0 ? (
         <p className="m-auto px-6 text-center text-muted">아직 추가된 장소가 없어요.</p>
@@ -60,8 +110,9 @@ export function PlaceBrowser({ title, places }: { title: string; places: Browser
             <div className="min-h-0 overflow-hidden">
               <ul className="flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4 py-2 [scrollbar-width:none]">
                 {places.map((p) => {
-                  const isOpen = p.id === openId;
-                  const isSelected = selected.has(p.id);
+                  const isOpen = p.id === current?.id;
+                  const selected = isSelected(p.id);
+                  const voters = [...(selected ? ["나"] : []), ...(tally.others[p.id] ?? [])];
                   return (
                     <li
                       key={p.id}
@@ -72,14 +123,23 @@ export function PlaceBrowser({ title, places }: { title: string; places: Browser
                         <div className="px-2 pt-1.5">
                           <ProviderBadge provider={p.provider} />
                           <p className="mt-1 line-clamp-2 h-10 text-sm font-medium leading-5">{p.title}</p>
+                          <p className="mt-0.5 truncate text-xs text-muted" data-testid="voters">
+                            {voters.length > 0 ? (
+                              <>
+                                <b className="text-accent">{voters.length}명</b> · {voters.join(", ")}
+                              </>
+                            ) : (
+                              "아직 아무도 안 골랐어요"
+                            )}
+                          </p>
                         </div>
                       </button>
                       <button
-                        onClick={() => toggle(p.id)}
-                        aria-pressed={isSelected}
-                        className={`m-2 rounded-lg py-1.5 text-sm font-semibold ${isSelected ? "bg-accent text-white" : "border border-line"}`}
+                        onClick={() => void toggle(p.id)}
+                        aria-pressed={selected}
+                        className={`m-2 rounded-lg py-1.5 text-sm font-semibold ${selected ? "bg-accent text-white" : "border border-line"}`}
                       >
-                        {isSelected ? "✓ 선택됨" : "선택"}
+                        {selected ? "✓ 선택됨" : "선택"}
                       </button>
                     </li>
                   );
@@ -118,20 +178,18 @@ export function PlaceBrowser({ title, places }: { title: string; places: Browser
           )}
 
           <section className="relative min-h-0 flex-1 bg-surface" aria-label="장소 정보">
-            {places
-              .filter((p) => recent.includes(p.id))
-              .map((p) => (
-                <iframe
-                  key={p.id}
-                  src={p.embedUrl}
-                  title={p.title}
-                  // No allow-top-navigation: the embedded page can't navigate away from the app.
-                  sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-                  referrerPolicy="no-referrer"
-                  onLoad={() => setLoaded((s) => new Set(s).add(p.id))}
-                  className={`absolute inset-0 h-full w-full border-0 bg-white ${p.id === openId ? "" : "invisible"}`}
-                />
-              ))}
+            {shownFrames.map((p) => (
+              <iframe
+                key={p.id}
+                src={p.embedUrl}
+                title={p.title}
+                // No allow-top-navigation: the embedded page can't navigate away from the app.
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                referrerPolicy="no-referrer"
+                onLoad={() => setLoaded((s) => new Set(s).add(p.id))}
+                className={`absolute inset-0 h-full w-full border-0 bg-white ${p.id === current?.id ? "" : "invisible"}`}
+              />
+            ))}
             {current && !loaded.has(current.id) && (
               <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted">불러오는 중…</p>
             )}

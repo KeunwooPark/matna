@@ -2,7 +2,7 @@
 
 A small web app that lets a group vote on places to meet. Each place is a link to Naver Map, Kakao Map or Google Maps.
 
-Status (2026-11-12): steps 1–3 done (step 3 tested in emulation only). Selections are not saved yet; that is step 4.
+Status (2026-11-12): steps 1–4 done (steps 3–4 tested in emulation only). Next is step 5, polish and deployment.
 
 ## User flow
 
@@ -57,7 +57,7 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
 
 - **events**: `id` (random 22-character ID, used in the share URL), `host_token` (a second secret for editing), `title`, `created_at`
 - **places**: `id`, `event_id`, `original_url`, `embed_url`, `provider` (`naver` | `kakao` | `google`), `title`, `thumbnail_url`, `position`
-- **participants**: `id`, `event_id`, `nickname`. The ID is kept in the browser's `localStorage` so votes survive a reload.
+- **participants**: `id`, `event_id`, `nickname`. The ID is kept in an httpOnly cookie scoped to `/e/{id}` (see step 4 notes).
 - **votes**: `place_id`, `participant_id`, unique on the pair
 
 ## Pages
@@ -92,13 +92,20 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - The last 4 opened places keep their iframe (hidden), so switching back doesn't reload the page.
    - The Select button is separate from the card's open button, so selecting doesn't change the viewer.
    - Selections live only in the page's state for now. Step 4 stores them as votes.
-4. Voting, nickname and live counts.
+4. Voting, nickname and live counts. **Done.** Notes:
+   - The participant ID lives in an httpOnly cookie with path `/e/{id}`, not `localStorage` as first planned. The server can then render a returning participant's votes on first load, and page scripts never see the ID. It acts as the participant's secret, so the tally never includes other participants' IDs.
+   - The nickname is asked on the first tap of Select, not on page load, so people can browse first. The nickname chip in the header renames.
+   - `GET /e/{id}/tally` returns the place order, the other participants' nicknames per place, and the caller's own picks. The page polls it every 4 seconds while visible. If the place order changed (the host added, removed or moved a place), the page refreshes its server-rendered list.
+   - Toggles show at once. The optimistic value is dropped only after a tally fetched after the save arrives, so a poll that was already in flight can't flip the button back.
+   - Each card shows the vote count and the names, with "나" for your own pick.
+   - Limits: 20-character nicknames, 200 participants per event.
+   - A browser that loses its cookie (cleared data, or a different browser such as KakaoTalk then Safari) joins as a new participant.
 5. Polish: empty and error states, the "Open in app" fallback, a share-link preview, deployment.
 
 ## Open decisions
 
 These are defaults proposed in the plan; the owner has not confirmed them.
 
-- **Vote visibility**: show counts and who voted to everyone. The alternative is hiding results until the host closes voting.
+- **Vote visibility**: show counts and who voted to everyone (implemented in step 4). The alternative is hiding results until the host closes voting.
 - **Who can add places**: host only, as in the user flow. Letting participants suggest places is a small later addition.
 - **Google links**: the embed is map-only. If the full Google place page matters, the only option is opening it in a new tab.
