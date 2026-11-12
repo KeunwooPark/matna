@@ -41,10 +41,46 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
         <h1 className="text-2xl font-bold">{event.title}</h1>
       </header>
 
+      {/* There are no accounts: losing this URL means losing the ability to edit, so this is a warning, not a caption. */}
+      <section role="note" aria-labelledby="host-link-title" className="flex flex-col gap-3 rounded-2xl border-2 border-warn-line bg-warn-bg p-4">
+        <div className="flex gap-3">
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            className="mt-0.5 h-6 w-6 shrink-0 text-warn-fg"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2.2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M10.3 3.9L2.4 17.6A2 2 0 0 0 4.1 20.6h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+            <path d="M12 9v4.5M12 17h.01" />
+          </svg>
+          <div className="flex flex-col gap-1">
+            <h2 id="host-link-title" className="font-bold text-warn-fg">
+              이 관리자 링크를 꼭 저장하세요
+            </h2>
+            <p className="text-sm">
+              장소를 추가하거나 고치려면 지금 보고 있는 이 페이지 주소가 필요해요. 로그인이 없어서 링크를 잃어버리면 다시 찾을 수 없어요.
+            </p>
+          </div>
+        </div>
+        <CopyLink
+          path={`/e/${id}/host?t=${token}`}
+          label="관리자 링크"
+          share={{ title: `${event.title} 관리자 링크`, text: `${event.title} 관리자 링크예요. 장소를 고칠 때 필요해요.`, button: "나에게 보내기" }}
+        />
+        <p className="text-sm text-warn-fg">이 링크는 참가자에게 보내지 마세요. 이 링크가 있으면 누구나 장소를 바꿀 수 있어요.</p>
+      </section>
+
       <section className="flex flex-col gap-2">
         <h2 className="font-semibold">참가자에게 공유할 링크</h2>
-        <CopyLink path={`/e/${id}`} title={event.title} />
-        <p className="text-xs text-muted">지금 보고 있는 이 페이지 주소는 관리자용이에요. 장소를 고치려면 이 주소를 따로 저장해 두세요.</p>
+        <CopyLink
+          path={`/e/${id}`}
+          label="참가자 링크"
+          share={{ title: event.title, text: `${event.title}, 어디서 만날까? 가고 싶은 곳을 골라 주세요.`, button: "카카오톡 등으로 공유하기" }}
+        />
         <a href={`/e/${id}`} target="_blank" className="text-sm font-medium text-accent">
           참가자 화면 열기 ↗
         </a>
