@@ -8,8 +8,10 @@ const description =
 
 // The only page search engines may index. Metadata merges shallowly, so
 // openGraph and robots are restated here in full.
+// The layout's title template doesn't apply to a page in the same segment, so
+// the full title is spelled out.
 export const metadata: Metadata = {
-  title,
+  title: { absolute: `${title} · ${APP_NAME}` },
   description,
   alternates: { canonical: "/" },
   openGraph: { title: `${title} · ${APP_NAME}`, description, url: "/", siteName: APP_NAME, type: "website", locale: "ko_KR", images: OG_IMAGE },
