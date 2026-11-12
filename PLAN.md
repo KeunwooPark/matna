@@ -88,6 +88,7 @@ The server resolves and rewrites each link once, when the host adds it. Every pl
    - Host page features: add by pasting a link or share text, rename, reorder (↑/↓), delete. Max 30 places per event.
 3. Participant page: layout, card strip, viewer. **Done.** Notes:
    - The page is `position: fixed; inset: 0`, so the outer page can't scroll. Top to bottom: title bar with the selection count, the card strip (moved to the top at the owner's request), a bar with the open place's name and an "Open in app" link (a floating button covered the embedded pages), and the viewer.
+   - A 접기/목록 button in the place-name bar folds the card strip away, so the viewer gets the space while reading a place. The bar stays visible, so the strip can be unfolded again.
    - The last 4 opened places keep their iframe (hidden), so switching back doesn't reload the page.
    - The Select button is separate from the card's open button, so selecting doesn't change the viewer.
    - Selections live only in the page's state for now. Step 4 stores them as votes.
