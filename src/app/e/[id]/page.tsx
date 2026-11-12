@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { getEvent, getPlaces } from "@/lib/events";
-import { APP_NAME, OG_IMAGE } from "@/lib/site";
+import { RememberEvent } from "@/components/remember-event";
+import { APP_NAME, OG_IMAGE, TAGLINE } from "@/lib/site";
 import { getParticipant, getTally } from "@/lib/votes";
 import { PlaceBrowser } from "./place-browser";
 
@@ -14,10 +15,11 @@ export async function generateMetadata({ params }: PageProps<"/e/[id]">): Promis
   const list = await getPlaces(id);
   const title = event.title;
   const names = list.map((p) => p.title);
+  // Starts with the tagline so everyone in the chat learns what the app is, not just this event.
   const description =
     names.length === 0
-      ? "어디서 만날까? 장소 후보를 준비하고 있어요."
-      : `어디서 만날까? 후보 ${names.length}곳 중 가고 싶은 곳을 골라 주세요. ${names.slice(0, 3).join(", ")}${names.length > 3 ? " 외" : ""}`;
+      ? `${TAGLINE} 장소 후보를 준비하고 있어요.`
+      : `${TAGLINE} 후보 ${names.length}곳: ${names.slice(0, 3).join(", ")}${names.length > 3 ? " 외" : ""}`;
   return { title, description, openGraph: { title: `${title} · ${APP_NAME}`, description, siteName: APP_NAME, type: "website", locale: "ko_KR", images: OG_IMAGE } };
 }
 
@@ -48,19 +50,22 @@ async function EventView({ params }: Pick<PageProps<"/e/[id]">, "params">) {
   }
   const [list, tally] = await Promise.all([getPlaces(id), getParticipant(id).then((me) => getTally(id, me))]);
   return (
-    <PlaceBrowser
-      eventId={id}
-      title={event.title}
-      initialTally={tally}
-      places={list.map((p) => ({
-        id: p.id,
-        provider: p.provider,
-        title: p.title,
-        thumbnailUrl: p.thumbnailUrl,
-        embedUrl: p.embedUrl,
-        openUrl: p.openUrl,
-        addedBy: p.addedByName,
-      }))}
-    />
+    <>
+      <RememberEvent id={id} title={event.title} />
+      <PlaceBrowser
+        eventId={id}
+        title={event.title}
+        initialTally={tally}
+        places={list.map((p) => ({
+          id: p.id,
+          provider: p.provider,
+          title: p.title,
+          thumbnailUrl: p.thumbnailUrl,
+          embedUrl: p.embedUrl,
+          openUrl: p.openUrl,
+          addedBy: p.addedByName,
+        }))}
+      />
+    </>
   );
 }

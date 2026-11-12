@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
-import { APP_NAME, OG_IMAGE } from "@/lib/site";
+import { APP_NAME, OG_IMAGE, TAGLINE } from "@/lib/site";
 import { CreateEventForm } from "./create-event-form";
+import { RecentEvents } from "./recent-events";
 
 const title = "모임 장소, 투표로 같이 정하기";
 const description =
@@ -24,9 +25,10 @@ export default function Home() {
       <div className="flex flex-1 flex-col justify-center gap-8 pb-12">
         <div>
           <h1 className="text-3xl font-bold">{APP_NAME}</h1>
-          <p className="mt-2 text-muted">장소 후보를 모으고, 링크를 공유하고, 같이 골라요.</p>
+          <p className="mt-2 text-muted">{TAGLINE}</p>
         </div>
         <CreateEventForm />
+        <RecentEvents />
       </div>
       <footer className="text-center text-xs text-muted">
         © 2026 Keunwoo Park ·{" "}

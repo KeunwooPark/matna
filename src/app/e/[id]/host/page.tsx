@@ -5,7 +5,8 @@ import { getDeletedPlaces } from "@/lib/places";
 import { countParticipants, getTally } from "@/lib/votes";
 import { AutoRefresh } from "./auto-refresh";
 import { AddPlaceForm } from "./add-place-form";
-import { CopyLink } from "./copy-link";
+import { CopyLink } from "@/components/copy-link";
+import { RememberEvent } from "@/components/remember-event";
 import { HostPlaceItem } from "./host-place-item";
 import { RestoreButton } from "./restore-button";
 
@@ -38,6 +39,8 @@ async function HostView({ params, searchParams }: Pick<PageProps<"/e/[id]/host">
 
   return (
     <div className="flex flex-col gap-8">
+      {/* Also keeps the host link on this browser's home page, a backup for the warning below. */}
+      <RememberEvent id={id} title={event.title} hostToken={token} />
       <header>
         <p className="text-sm text-muted">관리자 화면</p>
         <h1 className="text-2xl font-bold">{event.title}</h1>

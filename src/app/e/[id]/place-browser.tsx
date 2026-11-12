@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import type { Provider } from "@/db/schema";
 import type { Tally } from "@/lib/votes";
 import { PlaceThumb, ProviderBadge } from "@/components/provider-badge";
+import { APP_NAME } from "@/lib/site";
+import { AboutSheet } from "./about-sheet";
 import { deletePlace, joinEvent, suggestPlace, undoDeletePlace, type EditError } from "./actions";
 import { AddPlaceDialog } from "./add-place-dialog";
 import { NicknameDialog } from "./nickname-dialog";
@@ -42,6 +44,7 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [adding, setAdding] = useState(false);
   const [menuFor, setMenuFor] = useState<string | null>(null);
+  const [about, setAbout] = useState(false);
   // Places this participant deleted, so their own delete isn't reported back to them as someone else's.
   const [myDeletes, setMyDeletes] = useState<Set<string>>(new Set());
   // A place to scroll into view once its card is rendered (set after adding one).
@@ -165,6 +168,13 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
   return (
     <>
       <header className="flex shrink-0 items-center gap-2 px-4 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))]">
+        <button
+          onClick={() => setAbout(true)}
+          aria-label={`${APP_NAME} 소개`}
+          className="shrink-0 rounded-full bg-accent/10 px-2.5 py-1 text-xs font-bold text-accent"
+        >
+          {APP_NAME}
+        </button>
         <h1 className="min-w-0 flex-1 truncate font-bold">{title}</h1>
         {me ? (
           <button
@@ -179,6 +189,7 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
         )}
       </header>
 
+      {about && <AboutSheet onClose={() => setAbout(false)} />}
       {asking && <NicknameDialog initial={me?.nickname ?? ""} onSubmit={join} onClose={() => setAsking(null)} />}
       {adding && <AddPlaceDialog onSubmit={add} onClose={() => setAdding(false)} />}
       {menuPlace && <PlaceSheet place={menuPlace} voters={votersOf(menuPlace.id)} onDelete={() => remove(menuPlace.id)} onClose={() => setMenuFor(null)} />}
