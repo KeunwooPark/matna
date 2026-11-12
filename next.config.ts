@@ -3,6 +3,8 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   /* config options here */
   cacheComponents: true,
+  // Let phones on the tailnet use the dev server through its MagicDNS name.
+  allowedDevOrigins: ["**.ts.net"],
   partialPrefetching: true,
   // Link-preview scrapers that get metadata in <head> instead of streamed. This replaces Next's
   // default list, so it repeats it and adds KakaoTalk's scraper, Daum's crawler and Telegram (Naver's
