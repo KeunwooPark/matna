@@ -70,10 +70,10 @@ async function requireEditor(eventId: string): Promise<{ me: Participant } | { e
 }
 
 /** Adds a place from a pasted map link, credited to this participant. */
-export async function suggestPlace(eventId: string, rawInput: string): Promise<SuggestResult> {
+export async function suggestPlace(eventId: string, rawInput: string, name?: string): Promise<SuggestResult> {
   const editor = await requireEditor(eventId);
   if ("error" in editor) return { error: editor.error };
-  const result = await insertPlace(eventId, rawInput.slice(0, 2000), editor.me.id);
+  const result = await insertPlace(eventId, rawInput.slice(0, 2000), editor.me.id, name?.slice(0, 100));
   if (result.error !== undefined) return { error: "message", message: result.error };
   refresh();
   return { id: result.id };

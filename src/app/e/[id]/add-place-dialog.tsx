@@ -1,8 +1,9 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState } from "react";
+import { PlaceLinkFields } from "@/components/place-link-fields";
 
-type State = { error: string | null; value: string };
+type State = { error: string | null; value: string; name?: string };
 
 /** Lets a participant paste a map link to add a place. */
 export function AddPlaceDialog({
@@ -10,30 +11,18 @@ export function AddPlaceDialog({
   onClose,
 }: {
   /** Returns an error message, or null on success. */
-  onSubmit: (input: string) => Promise<string | null>;
+  onSubmit: (input: string, name?: string) => Promise<string | null>;
   onClose: () => void;
 }) {
-  const textRef = useRef<HTMLTextAreaElement>(null);
-  // Clipboard reading needs a secure context and isn't in every in-app browser.
-  const [canPaste] = useState(() => typeof navigator !== "undefined" && typeof navigator.clipboard?.readText === "function");
-  const [pasteFailed, setPasteFailed] = useState(false);
   const [state, submit, pending] = useActionState<State, FormData>(
     async (_prev, form) => {
       const value = String(form.get("link") ?? "");
-      return { error: await onSubmit(value), value };
+      const name = form.get("name");
+      const typed = typeof name === "string" ? name : undefined;
+      return { error: await onSubmit(value, typed), value, name: typed };
     },
     { error: null, value: "" },
   );
-
-  async function paste() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (textRef.current && text) textRef.current.value = text;
-      setPasteFailed(!text);
-    } catch {
-      setPasteFailed(true);
-    }
-  }
 
   return (
     // Sits near the top so the phone keyboard doesn't cover it.
@@ -49,25 +38,19 @@ export function AddPlaceDialog({
         <h2 id="add-place-title" className="text-lg font-bold">
           장소 추가
         </h2>
-        <p className="mt-1 text-sm text-muted">네이버 지도, 카카오맵, 구글 지도에서 공유 링크를 복사해 붙여 넣으세요.</p>
-        {/* React resets the form after each action; refill it on error so the paste isn't lost. */}
-        <textarea
-          ref={textRef}
-          name="link"
-          key={state.value}
-          defaultValue={state.value}
-          rows={3}
-          required
-          autoFocus
-          placeholder="예: https://naver.me/…"
-          className="mt-4 w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-base"
-        />
-        {canPaste && (
-          <button type="button" onClick={() => void paste()} className="mt-1 text-sm font-medium text-accent">
-            복사한 링크 붙여넣기
-          </button>
-        )}
-        {pasteFailed && <p className="mt-1 text-sm text-muted">붙여넣지 못했어요. 입력칸을 길게 눌러 붙여 넣어 주세요.</p>}
+        <p className="mt-1 text-sm text-muted">네이버 지도, 카카오맵, 구글 지도, 캐치테이블에서 공유 링크를 복사해 붙여 넣으세요.</p>
+        <div className="mt-4 flex flex-col gap-1">
+          {/* React resets the form after each action; refill it on error so the paste isn't lost. */}
+          <PlaceLinkFields
+            key={`${state.value}\0${state.name ?? ""}`}
+            defaultLink={state.value}
+            defaultName={state.name}
+            placeholder="예: https://naver.me/…"
+            autoFocus
+            pasteButton
+            className="bg-surface px-3 py-2.5"
+          />
+        </div>
         {state.error && <p className="mt-2 text-sm text-red-600">{state.error}</p>}
         <div className="mt-4 flex gap-2">
           <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-line py-2.5 font-medium">

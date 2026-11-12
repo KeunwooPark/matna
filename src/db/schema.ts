@@ -11,7 +11,7 @@ export const events = pgTable("events", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const providers = ["naver", "kakao", "google"] as const;
+export const providers = ["naver", "kakao", "google", "catchtable"] as const;
 export type Provider = (typeof providers)[number];
 
 export const places = pgTable("places", {

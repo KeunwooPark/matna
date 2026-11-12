@@ -30,9 +30,9 @@ async function isDuplicate(eventId: string, embedUrl: string, exceptId?: string)
 
 /**
  * Resolves a pasted link and appends it to the event's places.
- * `addedBy` is the participant adding it, or null for the host.
+ * `addedBy` is the participant adding it, or null for the host. `name` is a typed name for links whose page can't tell us one.
  */
-export async function insertPlace(eventId: string, input: string, addedBy: string | null): Promise<InsertResult> {
+export async function insertPlace(eventId: string, input: string, addedBy: string | null, name?: string): Promise<InsertResult> {
   if (!input.trim()) return { error: "링크를 붙여 넣어 주세요." };
   if ((await countLive(eventId)) >= MAX_PLACES) return { error: `장소는 최대 ${MAX_PLACES}개까지 추가할 수 있어요.` };
   if (addedBy && (await countLive(eventId, addedBy)) >= MAX_PLACES_PER_GUEST) {
@@ -41,7 +41,7 @@ export async function insertPlace(eventId: string, input: string, addedBy: strin
 
   let resolved;
   try {
-    resolved = await resolvePlace(input);
+    resolved = await resolvePlace(input, name);
   } catch (e) {
     if (e instanceof ResolveError) return { error: e.message };
     throw e;

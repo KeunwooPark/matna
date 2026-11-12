@@ -8,7 +8,7 @@ import { getEventAsHost, getPlaces } from "@/lib/events";
 import { newId } from "@/lib/ids";
 import { insertPlace, live, restoreDeletedPlace, softDeletePlace } from "@/lib/places";
 
-export type FormState = { error?: string; input?: string; ok?: number };
+export type FormState = { error?: string; input?: string; name?: string; ok?: number };
 
 export async function createEvent(_prev: FormState, form: FormData): Promise<FormState> {
   const title = String(form.get("title") ?? "").trim().slice(0, 60);
@@ -28,8 +28,9 @@ async function requireHost(eventId: string, token: string) {
 export async function addPlace(eventId: string, token: string, prev: FormState, form: FormData): Promise<FormState> {
   await requireHost(eventId, token);
   const input = String(form.get("link") ?? "").slice(0, 2000);
-  const result = await insertPlace(eventId, input, null);
-  if (result.error !== undefined) return { error: result.error, input };
+  const name = form.get("name");
+  const result = await insertPlace(eventId, input, null, typeof name === "string" ? name.slice(0, 100) : undefined);
+  if (result.error !== undefined) return { error: result.error, input, name: typeof name === "string" ? name : undefined };
   refresh();
   return { ok: (prev.ok ?? 0) + 1 };
 }

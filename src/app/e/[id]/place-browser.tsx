@@ -91,8 +91,8 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
     } else flash(result.message);
   }
 
-  async function add(input: string): Promise<string | null> {
-    const result = await suggestPlace(eventId, input).catch(() => ({ error: "message" as const, message: "연결이 끊겼어요. 다시 시도해 주세요." }));
+  async function add(input: string, name?: string): Promise<string | null> {
+    const result = await suggestPlace(eventId, input, name).catch(() => ({ error: "message" as const, message: "연결이 끊겼어요. 다시 시도해 주세요." }));
     if ("id" in result) {
       setAdding(false);
       setFolded(false);
@@ -346,7 +346,9 @@ export function PlaceBrowser({ eventId, title, places, initialTally }: { eventId
                 src={p.embedUrl}
                 title={p.title}
                 // No allow-top-navigation: the embedded page can't navigate away from the app.
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+                // CatchTable's page opens its app (catchtableapp://, intent://) on phones; without
+                // allow-popups a sandboxed frame can't launch app schemes. "앱에서 열기" still can.
+                sandbox={p.provider === "catchtable" ? "allow-scripts allow-same-origin allow-forms" : "allow-scripts allow-same-origin allow-popups allow-forms"}
                 referrerPolicy="no-referrer"
                 onLoad={() => setLoaded((s) => new Set(s).add(p.id))}
                 className={`absolute inset-0 h-full w-full border-0 bg-white ${p.id === current?.id ? "" : "invisible"}`}

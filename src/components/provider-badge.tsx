@@ -1,10 +1,11 @@
 import type { Provider } from "@/db/schema";
 
-const LABEL: Record<Provider, string> = { naver: "네이버", kakao: "카카오", google: "구글" };
+const LABEL: Record<Provider, string> = { naver: "네이버", kakao: "카카오", google: "구글", catchtable: "캐치테이블" };
 const STYLE: Record<Provider, string> = {
   naver: "bg-naver text-white",
   kakao: "bg-kakao text-black",
   google: "bg-google text-white",
+  catchtable: "bg-catchtable text-white",
 };
 
 export function ProviderBadge({ provider }: { provider: Provider }) {

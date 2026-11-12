@@ -3,7 +3,7 @@
 // Only fetches hosts on the allowlist below, and checks every redirect hop, so the server
 // can't be used to fetch arbitrary URLs.
 
-export type Provider = "naver" | "kakao" | "google";
+export type Provider = "naver" | "kakao" | "google" | "catchtable";
 
 export type ResolvedPlace = {
   provider: Provider;
@@ -25,6 +25,7 @@ const HOSTS: Record<Provider, RegExp> = {
   naver: /^(naver\.me|(m\.)?map\.naver\.com|(m\.|pcmap\.)?place\.naver\.com)$/,
   kakao: /^(kko\.to|(m\.)?map\.kakao\.com|place\.map\.kakao\.com)$/,
   google: /^((www\.|maps\.)?google\.(com|co\.kr)|maps\.app\.goo\.gl|goo\.gl)$/,
+  catchtable: /^((www\.|app\.)?catchtable\.co\.kr|(www\.)?catchtable\.net)$/,
 };
 
 const SHORT_HOSTS = /^(naver\.me|kko\.to|maps\.app\.goo\.gl|goo\.gl)$/;
@@ -106,6 +107,43 @@ function googlePlace(u: URL): GooglePlace | null {
   const cid = u.searchParams.get("cid");
   if (cid && /^\d+$/.test(cid)) return { name: null, cid };
   return null;
+}
+
+type CatchtableShop = { embedUrl: string; slug: string };
+
+function catchtableShop(u: URL): CatchtableShop | null {
+  // app.catchtable.co.kr/ct/shop/{slug} (what the app shares; www. redirects to app.)
+  let m = u.pathname.match(/^\/ct\/shop\/([A-Za-z0-9_-]+)/);
+  if (m && u.hostname.endsWith("catchtable.co.kr")) return { embedUrl: `https://app.catchtable.co.kr/ct/shop/${m[1]}`, slug: m[1] };
+  // www.catchtable.net/shop/{id}, the English site. Its ids are sometimes opaque and don't work on the app domain, so keep it.
+  m = u.pathname.match(/^\/shop\/([A-Za-z0-9_=-]+)/);
+  if (m && u.hostname.endsWith("catchtable.net")) return { embedUrl: `https://www.catchtable.net/shop/${m[1]}`, slug: m[1] };
+  return null;
+}
+
+/** A slug like "uovohouse" is a usable stand-in name; an opaque base64 id ("Y2F0Y2hf…" = "catch_…") is not. */
+function readableSlug(slug: string): string | null {
+  return /^Y2F0Y2hf/.test(slug) || slug.length > 40 ? null : slug;
+}
+
+/**
+ * CatchTable pages are rendered in the browser, so the server can't read the shop's name.
+ * When the pasted text is a CatchTable shop link, returns the name to prefill for the person
+ * to check (from share text, else the slug; "" when there's nothing usable). Null otherwise.
+ */
+export function catchtablePrefill(text: string): string | null {
+  const raw = extractUrl(text.trim());
+  if (!raw) return null;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (providerOf(url) !== "catchtable") return null;
+  const shop = catchtableShop(url);
+  if (!shop) return null;
+  return nameFromShareText(text, raw) ?? readableSlug(shop.slug) ?? "";
 }
 
 // --- Fetching ---
@@ -203,7 +241,8 @@ async function openGraph(url: URL, provider: Provider): Promise<{ title: string 
 
 // --- Entry point ---
 
-export async function resolvePlace(input: string): Promise<ResolvedPlace> {
+/** `name` is what the person typed for the place; only used where the page can't tell us (CatchTable). */
+export async function resolvePlace(input: string, name?: string): Promise<ResolvedPlace> {
   const raw = extractUrl(input.trim());
   if (!raw) throw new ResolveError("링크를 찾을 수 없어요.");
   let start: URL;
@@ -213,7 +252,7 @@ export async function resolvePlace(input: string): Promise<ResolvedPlace> {
     throw new ResolveError("올바른 링크가 아니에요.");
   }
   const provider = providerOf(start);
-  if (!provider) throw new ResolveError("네이버 지도, 카카오맵, 구글 지도 링크만 추가할 수 있어요.");
+  if (!provider) throw new ResolveError("네이버 지도, 카카오맵, 구글 지도, 캐치테이블 링크만 추가할 수 있어요.");
   const shareName = nameFromShareText(input, raw);
 
   if (provider === "naver") {
@@ -244,6 +283,14 @@ export async function resolvePlace(input: string): Promise<ResolvedPlace> {
       title: og.title || shareName || `카카오맵 장소 ${id}`,
       thumbnailUrl: og.image,
     };
+  }
+
+  if (provider === "catchtable") {
+    const shop = catchtableShop(start);
+    if (!shop) throw new ResolveError("이 캐치테이블 링크에서 가게를 찾지 못했어요. 가게 페이지의 공유 링크를 붙여 넣어 주세요.");
+    const title = name?.trim().slice(0, 100) || shareName || readableSlug(shop.slug);
+    if (!title) throw new ResolveError("가게 이름을 입력해 주세요.");
+    return { provider, originalUrl: raw, embedUrl: shop.embedUrl, openUrl: shop.embedUrl, title, thumbnailUrl: null };
   }
 
   // Google: the full place page can't be framed, so embed a map centred on the place.
