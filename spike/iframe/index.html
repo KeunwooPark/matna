@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>matna iframe spike</title>
+<style>
+  :root { --bg: #fff; --fg: #111; --muted: #666; --line: #ddd; --accent: #0a7; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111; --fg: #eee; --muted: #999; --line: #333; } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; overscroll-behavior: none; background: var(--bg); color: var(--fg);
+    font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; }
+  .app { height: 100dvh; display: flex; flex-direction: column; }
+  .info { padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 11px; color: var(--muted); }
+  .info b { color: var(--fg); }
+  .info .row { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .viewer { flex: 1; min-height: 0; position: relative; }
+  .viewer iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .bar { display: flex; gap: 6px; padding: 6px 10px; border-top: 1px solid var(--line); align-items: center; }
+  .bar input[type=url] { flex: 1; min-width: 0; padding: 6px; font: inherit; }
+  .strip { display: flex; gap: 8px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--line); -webkit-overflow-scrolling: touch; }
+  .card { flex: 0 0 150px; scroll-snap-align: start; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: var(--bg);
+    color: var(--fg); text-align: left; font: inherit; cursor: pointer; }
+  .card.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+  .card .p { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+  .card .t { font-weight: 600; margin-top: 2px; }
+  .card .e { font-size: 10px; color: var(--muted); margin-top: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="info">
+    <div class="row">UA: <b id="ua"></b></div>
+    <div class="row">Storage: <b id="store"></b> · Loads: <b id="loads">0</b> · Sandbox: <b id="sbx"></b></div>
+    <div class="row">Current: <b id="cur">—</b></div>
+  </div>
+  <div class="viewer" id="viewer"></div>
+  <div class="bar">
+    <input type="url" id="custom" placeholder="Paste any URL to try in the frame">
+    <button id="go">Load</button>
+    <label><input type="checkbox" id="sandbox"> sandbox</label>
+  </div>
+  <div class="strip" id="strip"></div>
+</div>
+<script>
+// Each case: what to load in the frame and what we expect. "control" cases are expected to be blocked.
+const CASES = [
+  { p: 'naver',  t: 'Naver place (mobile)',  e: 'expect: works', url: 'https://m.place.naver.com/place/11591563/home' },
+  { p: 'naver',  t: 'Naver map entry',       e: 'control: blocked', url: 'https://map.naver.com/p/entry/place/11591563' },
+  { p: 'kakao',  t: 'Kakao place',           e: 'expect: works', url: 'https://place.map.kakao.com/8332362' },
+  { p: 'kakao',  t: 'Kakao mobile map',      e: 'unknown', url: 'https://m.map.kakao.com/actions/detailMapView?id=8332362' },
+  { p: 'google', t: 'Google embed (q=)',     e: 'expect: map only', url: 'https://www.google.com/maps?q=' + encodeURIComponent('원조만선호프 을지로') + '&output=embed' },
+  { p: 'google', t: 'Google place page',     e: 'control: blocked', url: 'https://www.google.com/maps/search/' + encodeURIComponent('원조만선호프 을지로') },
+];
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+$('ua').textContent = navigator.userAgent;
+
+// localStorage test: a stable ID across reloads means participant identity will survive.
+try {
+  let id = localStorage.getItem('matna-spike-id'), state = 'returning';
+  if (!id) { id = Math.random().toString(36).slice(2, 10); localStorage.setItem('matna-spike-id', id); state = 'new'; }
+  $('store').textContent = `ok (${state}, id ${id})`;
+} catch (err) { $('store').textContent = 'FAILED: ' + err.name; }
+
+// Detect frame-busting: if the frame navigates the top window away, the next visit sees this marker.
+try {
+  const busted = sessionStorage.getItem('matna-spike-leaving');
+  if (busted) { $('cur').textContent = 'Previous page left via: ' + busted; sessionStorage.removeItem('matna-spike-leaving'); }
+} catch {}
+let current = null;
+addEventListener('pagehide', () => { try { if (current) sessionStorage.setItem('matna-spike-leaving', current); } catch {} });
+
+const sbx = $('sandbox');
+sbx.checked = params.get('sandbox') === '1';
+$('sbx').textContent = sbx.checked ? 'on' : 'off';
+sbx.onchange = () => { $('sbx').textContent = sbx.checked ? 'on' : 'off'; if (current) load(current); };
+
+let loads = 0;
+function load(url) {
+  current = url;
+  const f = document.createElement('iframe');
+  // Sandbox without allow-top-navigation stops a page from busting out of the frame.
+  if (sbx.checked) f.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-forms');
+  f.setAttribute('referrerpolicy', 'no-referrer-when-downgrade');
+  f.allow = 'geolocation';
+  f.onload = () => { $('loads').textContent = ++loads; };
+  f.src = url;
+  $('viewer').replaceChildren(f);
+  $('cur').textContent = url;
+}
+
+CASES.forEach((c, i) => {
+  const b = document.createElement('button');
+  b.className = 'card';
+  b.innerHTML = `<div class="p">${c.p}</div><div class="t">${c.t}</div><div class="e">${c.e}</div>`;
+  b.onclick = () => { document.querySelectorAll('.card').forEach(x => x.classList.remove('on')); b.classList.add('on'); load(c.url); };
+  $('strip').append(b);
+});
+$('go').onclick = () => { const u = $('custom').value.trim(); if (u) load(u); };
+
+const start = params.get('case');
+if (start !== null && CASES[+start]) $('strip').children[+start].click();
+</script>
+</body>
+</html>

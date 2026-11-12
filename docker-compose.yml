@@ -1,0 +1,15 @@
+# Local development database. Production uses a hosted Postgres (Neon or Supabase).
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: matna
+      POSTGRES_PASSWORD: matna
+      POSTGRES_DB: matna
+    ports:
+      - "5433:5432"
+    volumes:
+      - matna-db:/var/lib/postgresql/data
+
+volumes:
+  matna-db:
