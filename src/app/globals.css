@@ -7,6 +7,9 @@
   --line: #e5e7eb;
   --surface: #f9fafb;
   --accent: #ff6b35;
+  --accent-soft: #fff1eb;
+  --accent-ink: #c2410c;
+  --chat: #eef2f6;
   --warn-bg: #fff8e6;
   --warn-line: #f0b33a;
   --warn-fg: #7a4600;
@@ -19,6 +22,9 @@
     --muted: #9ca3af;
     --line: #27272a;
     --surface: #18181b;
+    --accent-soft: #3a1d10;
+    --accent-ink: #ffb08f;
+    --chat: #1d2229;
     --warn-bg: #2a2110;
     --warn-line: #a87418;
     --warn-fg: #f6cf7f;
@@ -32,6 +38,9 @@
   --color-line: var(--line);
   --color-surface: var(--surface);
   --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-chat: var(--chat);
   --color-warn-bg: var(--warn-bg);
   --color-warn-line: var(--warn-line);
   --color-warn-fg: var(--warn-fg);
@@ -46,4 +55,41 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/*
+ * Home page "사용 방법" illustrations (src/app/how-it-works.tsx). Each step is a view timeline,
+ * and pieces inside it play their entrance as the step scrolls into view. Elements are styled
+ * in their finished state, so browsers without scroll-driven animations, and people who prefer
+ * reduced motion, just see the finished picture.
+ */
+@keyframes how-rise {
+  from { opacity: 0; translate: 0 12px; }
+}
+@keyframes how-drop {
+  from { opacity: 0; translate: 0 -12px; }
+}
+@keyframes how-pop {
+  from { opacity: 0; scale: 0.8; }
+}
+@keyframes how-draw {
+  from { opacity: 0; scale: 1.06; }
+}
+@keyframes how-roll {
+  from { translate: 0 0; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Not `view()`: Turbopack's CSS minifier drops an @supports block that tests it. */
+  @supports (animation-timeline: --how-step) {
+    .how-step {
+      view-timeline: --how-step;
+    }
+    .how-anim {
+      /* The shorthand resets timeline and range, so they come after it. */
+      animation: var(--how-kf) ease-out both;
+      animation-timeline: --how-step;
+      animation-range: var(--how-range);
+    }
+  }
 }
